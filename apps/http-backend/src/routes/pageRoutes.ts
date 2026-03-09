@@ -16,4 +16,4 @@ router.post("/room", authMiddleware, createRoom);
 
 // router.get("/chat/:roomId", getChats);
 
-export default rou
+export default router;
