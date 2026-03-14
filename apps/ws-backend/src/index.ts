@@ -1,139 +1,232 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '@repo/backend-common/config';
-import { prismaClient } from '@repo/db/client';
+import dotenv from "dotenv";
+dotenv.config();
 
-// Use the port from Render or default to 8080
-const PORT = parseInt(process.env.PORT || "8080", 10);
+import { WebSocketServer, WebSocket } from "ws";
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { prismaClient } from "@repo/db/client";
+import { WebSocketMessage, WsDataType } from "@repo/common/types";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+const PORT = Number(process.env.PORT) || 8080;
 
 const wss = new WebSocketServer({ port: PORT });
+
 console.log(`WebSocket server running on port ${PORT}`);
 
-interface User {
+type Connection = {
+  id: string;
+  userId: string;
+  userName: string;
   ws: WebSocket;
   rooms: string[];
-  userId: string;
-}
+};
 
-const users: User[] = [];
+const connections: Connection[] = [];
 
-function checkUser(token: string): string | null {
+/* ---------------- AUTH ---------------- */
+
+function authenticate(token: string): string | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    // decoded can be string or object
-    if (typeof decoded === 'string' || !decoded || !(decoded as any).userId) return null;
-    return (decoded as any).userId as string;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    if (!decoded || typeof decoded === "string" || !decoded.id) {
+      return null;
+    }
+
+    return decoded.id;
   } catch {
     return null;
   }
 }
 
-wss.on('connection', function connection(ws, request) {
-  try {
-    const url = request.url;
-    if (!url) {
-      ws.close();
-      return;
+/* ---------------- HELPERS ---------------- */
+
+function broadcast(roomId: string, message: WebSocketMessage, exclude?: string) {
+  connections.forEach((conn) => {
+    if (conn.rooms.includes(roomId) && conn.id !== exclude) {
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        conn.ws.send(JSON.stringify(message));
+      }
     }
+  });
+}
 
-    const queryParams = new URLSearchParams(url.split('?')[1]);
-    const token = queryParams.get('token') || '';
-    const userId = checkUser(token);
+function getParticipants(roomId: string) {
+  const map = new Map();
 
-    if (!userId) {
-      ws.close();
-      return;
-    }
+  connections
+    .filter((c) => c.rooms.includes(roomId))
+    .forEach((c) => {
+      map.set(c.userId, {
+        userId: c.userId,
+        userName: c.userName,
+      });
+    });
 
-    users.push({ userId, rooms: [], ws });
+  return Array.from(map.values());
+}
 
-    ws.on('message', async function message(data) {
-      try {
-        const parsedData =
-          typeof data === 'string' ? JSON.parse(data) : JSON.parse(data.toString());
+/* ---------------- CONNECTION ---------------- */
 
-        //  JOIN ROOM
-        if (parsedData.type === 'join_room') {
-          const user = users.find((x) => x.ws === ws);
-          if (user && parsedData.roomId) {
-            user.rooms.push(parsedData.roomId);
+wss.on("connection", (ws, req) => {
+  const url = req.url;
 
-            const existingUser = await prismaClient.user.findUnique({
-              where: { id: userId },
-            });
+  if (!url) return;
 
-            if (!existingUser) {
-              await prismaClient.user.create({
-                data: {
-                  id: userId,
-                  email: `temp_${userId}@example.com`, // placeholder
-                  password: "hashed-temp-password",
-                  name: "Temporary User",
-                },
-              });
-            }
+  const params = new URLSearchParams(url.split("?")[1]);
+  const token = params.get("token");
 
-            await prismaClient.room.upsert({
-              where: { slug: parsedData.roomId },
-              update: {},
-              create: {
-                slug: parsedData.roomId,
-                adminId: userId,
-              },
-            });
-          }
-        }
+  if (!token) {
+    ws.close();
+    return;
+  }
 
-        //  LEAVE ROOM
-        if (parsedData.type === 'leave_room') {
-          const user = users.find((x) => x.ws === ws);
-          if (!user) return;
-          user.rooms = user.rooms.filter((x) => x !== parsedData.roomId);
-        }
+  const userId = authenticate(token);
 
-        // CHAT MESSAGE
-        if (parsedData.type === 'chat') {
-          const slug = parsedData.roomId; // frontend sends slug
-          const message = parsedData.message;
+  if (!userId) {
+    ws.close();
+    return;
+  }
 
-          // Find the room by slug
+  const connectionId = `conn_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  const connection: Connection = {
+    id: connectionId,
+    userId,
+    userName: userId,
+    ws,
+    rooms: [],
+  };
+
+  connections.push(connection);
+
+  ws.send(
+    JSON.stringify({
+      type: WsDataType.CONNECTION_READY,
+      connectionId,
+    })
+  );
+
+  console.log("Connected:", connectionId);
+
+  /* ---------------- MESSAGE HANDLING ---------------- */
+
+  ws.on("message", async (data) => {
+    try {
+      const msg: WebSocketMessage = JSON.parse(data.toString());
+
+      if (!msg.roomId) return;
+
+      switch (msg.type) {
+
+        /* -------- JOIN ROOM -------- */
+
+        case WsDataType.JOIN: {
+
           const room = await prismaClient.room.findUnique({
-            where: { slug },
+            where: { id: msg.roomId },
           });
 
           if (!room) {
-            console.error('Room not found for slug:', slug);
+            ws.close();
             return;
           }
 
-          // Save chat to DB
+          if (!connection.rooms.includes(msg.roomId)) {
+            connection.rooms.push(msg.roomId);
+          }
+
+          ws.send(
+            JSON.stringify({
+              type: WsDataType.USER_JOINED,
+              roomId: msg.roomId,
+              participants: getParticipants(msg.roomId),
+            })
+          );
+
+          break;
+        }
+
+        /* -------- LEAVE ROOM -------- */
+
+        case WsDataType.LEAVE: {
+          connection.rooms = connection.rooms.filter((r) => r !== msg.roomId);
+
+          broadcast(
+            msg.roomId,
+            {
+              type: WsDataType.USER_LEFT,
+              roomId: msg.roomId,
+              userId: connection.userId,
+            } as any,
+            connection.id
+          );
+
+          break;
+        }
+
+        /* -------- DRAW SHAPE -------- */
+
+        case WsDataType.DRAW: {
+
+          if (!msg.message || !msg.id) return;
+
           await prismaClient.chat.create({
             data: {
-              roomId: room.id,
-              message,
-              userId,
+              roomId: msg.roomId,
+              userId: connection.userId,
+              message: JSON.stringify(msg.message),
             },
           });
 
-          // Broadcast to all users in the same room
-          users.forEach((user) => {
-            if (user.rooms.includes(parsedData.roomId)) {
-              user.ws.send(
-                JSON.stringify({
-                  type: 'chat',
-                  message,
-                  roomId: slug,
-                })
-              );
-            }
-          });
+          broadcast(msg.roomId, msg);
+
+          break;
         }
-      } catch (err) {
-        console.error('Message handling error:', err);
+
+        /* -------- UPDATE SHAPE -------- */
+
+        case WsDataType.UPDATE: {
+
+          broadcast(msg.roomId, msg);
+
+          break;
+        }
+
+        /* -------- ERASE SHAPE -------- */
+
+        case WsDataType.ERASER: {
+
+          broadcast(msg.roomId, msg);
+
+          break;
+        }
+
+        /* -------- CURSOR MOVE -------- */
+
+        case WsDataType.CURSOR_MOVE: {
+
+          broadcast(msg.roomId, msg, connection.id);
+
+          break;
+        }
+
       }
-    });
-  } catch (err) {
-    console.error('Connection error:', err);
-    ws.close();
-  }
+    } catch (err) {
+      console.error("WS message error:", err);
+    }
+  });
+
+  /* ---------------- CLOSE ---------------- */
+
+  ws.on("close", () => {
+
+    const index = connections.findIndex((c) => c.id === connectionId);
+
+    if (index !== -1) {
+      connections.splice(index, 1);
+    }
+
+    console.log("Disconnected:", connectionId);
+  });
 });
