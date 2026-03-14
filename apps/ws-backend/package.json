@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
+  "scripts": { 
     "build": "tsc -b",
     "staart": "node ./dist/index.js",
     "dev": "npm run build && npm run start"
@@ -14,6 +14,9 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
+    "@repo/backend-common": "*",
+    "@repo/common": "*",
+    "@repo/db": "*",
     "@types/ws": "^8.18.1",
     "@types/jsonwebtoken": "^9.0.10"
   },
