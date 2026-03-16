@@ -36,8 +36,8 @@ export default function Toolbar({ setTool }: any) {
     <div className="fixed top-4 left-4 right-4 flex items-center justify-between z-50">
 
       {/* LEFT MENU BUTTON */}
-      <button className="p-2 rounded-lg bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300">
-        <Menu size={18} />
+      <button className="p-0 bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300">
+        <Menu size={0} />
       </button>
 
       {/* CENTER TOOLBAR */}

@@ -9,7 +9,11 @@ export type Shape = {
   points?: { x: number; y: number }[];
 };
 
-export function drawShapes(canvas: HTMLCanvasElement, elements: Shape[]) {
+export function drawShapes(
+  canvas: HTMLCanvasElement,
+  elements: Shape[],
+  isDark: boolean
+) {
   const rc = rough.canvas(canvas);
   const ctx = canvas.getContext("2d");
 
@@ -17,13 +21,16 @@ export function drawShapes(canvas: HTMLCanvasElement, elements: Shape[]) {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  const strokeColor = isDark ? "#f9fafb" : "#111827";
+
   elements.forEach((el) => {
 
     const options = {
       roughness: 0,
       bowing: 0,
       strokeWidth: 2,
-      seed: 1
+      seed: 1,
+      stroke: strokeColor
     };
 
     // RECTANGLE
@@ -107,6 +114,7 @@ export function drawShapes(canvas: HTMLCanvasElement, elements: Shape[]) {
       ctx.beginPath();
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
+      ctx.strokeStyle = strokeColor;
 
       el.points.forEach((point, index) => {
         if (index === 0) {

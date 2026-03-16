@@ -23,7 +23,11 @@ export default function Canvas({ tool }: any) {
 
   const [erasing, setErasing] = useState(false);
 
-  /* ---------------- canvas resize ---------------- */
+  const isDark =
+    typeof window !== "undefined" &&
+    document.documentElement.classList.contains("dark");
+
+  /* ---------------- Canvas Resize ---------------- */
 
   const resizeCanvas = () => {
     const canvas = canvasRef.current;
@@ -47,7 +51,22 @@ export default function Canvas({ tool }: any) {
     return () => window.removeEventListener("resize", resizeCanvas);
   }, []);
 
-  /* ---------------- redraw ---------------- */
+  /* ---------------- Clear Canvas Listener ---------------- */
+
+  useEffect(() => {
+    const handleClearCanvas = () => {
+      setElements([]);
+      setSelectedIndex(null);
+    };
+
+    window.addEventListener("clear-canvas", handleClearCanvas);
+
+    return () => {
+      window.removeEventListener("clear-canvas", handleClearCanvas);
+    };
+  }, []);
+
+  /* ---------------- Redraw Canvas ---------------- */
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -61,13 +80,13 @@ export default function Canvas({ tool }: any) {
     ctx.save();
     ctx.translate(pan.x, pan.y);
 
-    drawShapes(canvas, elements);
-    drawSelection(canvas, elements, selectedIndex);
+    drawShapes(canvas, elements, isDark);
+    drawSelection(canvas, elements, selectedIndex, isDark);
 
     ctx.restore();
   }, [elements, selectedIndex, pan]);
 
-  /* ---------------- delete key ---------------- */
+  /* ---------------- Delete Key ---------------- */
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,7 +100,7 @@ export default function Canvas({ tool }: any) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedIndex]);
 
-  /* ---------------- cursor ---------------- */
+  /* ---------------- Cursor ---------------- */
 
   const getCursor = () => {
     switch (tool) {
@@ -101,48 +120,42 @@ export default function Canvas({ tool }: any) {
     }
   };
 
-  /* ---------------- hit detection ---------------- */
+  /* ---------------- Hit Detection ---------------- */
 
   const isInsideShape = (el: Shape, x: number, y: number) => {
+    if (el.type === "pencil" && el.points) {
+      return el.points.some(
+        (p) => Math.abs(p.x - x) < 14 && Math.abs(p.y - y) < 14
+      );
+    }
 
-  // pencil
-  if (el.type === "pencil" && el.points) {
-    return el.points.some(
-      (p) => Math.abs(p.x - x) < 14 && Math.abs(p.y - y) < 14
-    );
-  }
+    if (el.type === "circle") {
+      const radius = Math.sqrt(
+        (el.x2! - el.x1!) ** 2 + (el.y2! - el.y1!) ** 2
+      );
 
-  // circle
-  if (el.type === "circle") {
-    const radius = Math.sqrt(
-      (el.x2! - el.x1!) ** 2 + (el.y2! - el.y1!) ** 2
-    );
+      const dist = Math.sqrt((x - el.x1!) ** 2 + (y - el.y1!) ** 2);
 
-    const dist = Math.sqrt(
-      (x - el.x1!) ** 2 + (y - el.y1!) ** 2
-    );
+      return dist <= radius + 8;
+    }
 
-    return dist <= radius + 8; // eraser tolerance
-  }
+    if (
+      el.x1 === undefined ||
+      el.x2 === undefined ||
+      el.y1 === undefined ||
+      el.y2 === undefined
+    )
+      return false;
 
-  // other shapes (rectangle, line, diamond, arrow)
-  if (
-    el.x1 === undefined ||
-    el.x2 === undefined ||
-    el.y1 === undefined ||
-    el.y2 === undefined
-  )
-    return false;
+    const minX = Math.min(el.x1, el.x2);
+    const maxX = Math.max(el.x1, el.x2);
+    const minY = Math.min(el.y1, el.y2);
+    const maxY = Math.max(el.y1, el.y2);
 
-  const minX = Math.min(el.x1, el.x2);
-  const maxX = Math.max(el.x1, el.x2);
-  const minY = Math.min(el.y1, el.y2);
-  const maxY = Math.max(el.y1, el.y2);
+    return x >= minX - 6 && x <= maxX + 6 && y >= minY - 6 && y <= maxY + 6;
+  };
 
-  return x >= minX - 6 && x <= maxX + 6 && y >= minY - 6 && y <= maxY + 6;
-};
-
-  /* ---------------- resize handles ---------------- */
+  /* ---------------- Resize Handles ---------------- */
 
   const getHandleAtPosition = (el: Shape, x: number, y: number) => {
     if (
@@ -178,7 +191,7 @@ export default function Canvas({ tool }: any) {
     return null;
   };
 
-  /* ---------------- mouse down ---------------- */
+  /* ---------------- Mouse Down ---------------- */
 
   const handleMouseDown = (e: any) => {
     const { offsetX, offsetY } = e.nativeEvent;
@@ -193,10 +206,7 @@ export default function Canvas({ tool }: any) {
 
     if (tool === "eraser") {
       setErasing(true);
-
-      setElements((prev) =>
-        prev.filter((el) => !isInsideShape(el, x, y))
-      );
+      setElements((prev) => prev.filter((el) => !isInsideShape(el, x, y)));
       return;
     }
 
@@ -211,10 +221,7 @@ export default function Canvas({ tool }: any) {
 
     if (tool === "select") {
       const reversed = [...elements].reverse();
-
-      const index = reversed.findIndex((el) =>
-        isInsideShape(el, x, y)
-      );
+      const index = reversed.findIndex((el) => isInsideShape(el, x, y));
 
       if (index !== -1) {
         const realIndex = elements.length - 1 - index;
@@ -243,8 +250,6 @@ export default function Canvas({ tool }: any) {
       return;
     }
 
-    /* draw shapes */
-
     setElements((prev) => [
       ...prev,
       { type: tool, x1: x, y1: y, x2: x, y2: y },
@@ -253,7 +258,7 @@ export default function Canvas({ tool }: any) {
     setDrawing(true);
   };
 
-  /* ---------------- mouse move ---------------- */
+  /* ---------------- Mouse Move ---------------- */
 
   const handleMouseMove = (e: any) => {
     const { offsetX, offsetY, movementX, movementY } = e.nativeEvent;
@@ -272,9 +277,7 @@ export default function Canvas({ tool }: any) {
     }
 
     if (erasing) {
-      setElements((prev) =>
-        prev.filter((el) => !isInsideShape(el, x, y))
-      );
+      setElements((prev) => prev.filter((el) => !isInsideShape(el, x, y)));
       return;
     }
 
@@ -325,6 +328,7 @@ export default function Canvas({ tool }: any) {
 
         return updated;
       });
+
       return;
     }
 
@@ -352,7 +356,7 @@ export default function Canvas({ tool }: any) {
     }
   };
 
-  /* ---------------- mouse up ---------------- */
+  /* ---------------- Mouse Up ---------------- */
 
   const handleMouseUp = () => {
     setDrawing(false);
@@ -384,8 +388,8 @@ export default function Canvas({ tool }: any) {
             top: mousePos.y - 14,
             width: 16,
             height: 16,
-            background: "black",
-            border: "2px solid white",
+            background: isDark ? "white" : "black",
+            border: isDark ? "2px solid black" : "2px solid white",
             borderRadius: "50%",
             pointerEvents: "none",
           }}
@@ -395,12 +399,13 @@ export default function Canvas({ tool }: any) {
   );
 }
 
-/* ---------------- selection box ---------------- */
+/* ---------------- Selection Box ---------------- */
 
 function drawSelection(
   canvas: HTMLCanvasElement,
   elements: Shape[],
-  selectedIndex: number | null
+  selectedIndex: number | null,
+  isDark: boolean
 ) {
   if (selectedIndex === null) return;
 
@@ -420,7 +425,7 @@ function drawSelection(
   ctx.lineWidth = 2;
   ctx.strokeRect(x, y, w, h);
 
-  const size = 12;
+  const size = 10;
 
   const handles = [
     [x, y],
@@ -430,7 +435,7 @@ function drawSelection(
   ];
 
   handles.forEach(([hx, hy]) => {
-    ctx.fillStyle = "#111827";
+    ctx.fillStyle = isDark ? "#1f2937" : "#ffffff";
     ctx.strokeStyle = "#6366F1";
 
     ctx.beginPath();

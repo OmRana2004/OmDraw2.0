@@ -27,6 +27,7 @@ export default function Sidebar() {
       document.documentElement.classList.remove("dark");
     } else {
       const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
       if (systemDark) {
         document.documentElement.classList.add("dark");
       } else {
@@ -34,6 +35,12 @@ export default function Sidebar() {
       }
     }
   }, [theme]);
+
+  const clearCanvas = () => {
+    if (confirm("Clear the entire canvas?")) {
+      window.dispatchEvent(new Event("clear-canvas"));
+    }
+  };
 
   return (
     <>
@@ -47,23 +54,22 @@ export default function Sidebar() {
         transition-colors"
       >
         <Menu size={18} className="text-neutral-700 dark:text-neutral-300" />
-        <span className="sr-only">Toggle sidebar</span>
       </button>
 
       {/* SIDEBAR */}
       <div
-        className={`fixed top-24 left-4 z-40 transform transition-all duration-300 ${
+        className={`fixed top-20 left-2 z-40 transform transition-all duration-300 ${
           open
             ? "opacity-100 translate-x-0 pointer-events-auto"
             : "opacity-0 -translate-x-10 pointer-events-none"
         }`}
       >
-        <div className="flex flex-col w-72 rounded-xl bg-[#1f1f27] text-gray-200 shadow-xl border border-neutral-700">
+        <div className="flex flex-col w-56 rounded-2xl bg-[#1f1f27] text-gray-200 shadow-xl border border-neutral-800">
 
           {/* MENU */}
           <div className="overflow-auto py-3 px-3 space-y-1">
             <MenuItem icon={Command} label="Command palette" shortcut="Ctrl+/" />
-            <MenuItem icon={Trash2} label="Clear canvas" />
+            <MenuItem icon={Trash2} label="Clear canvas" onClick={clearCanvas} />
             <MenuItem icon={Download} label="Export Drawing" />
             <MenuItem icon={Upload} label="Import Drawing" />
             <MenuItem icon={Share2} label="Live collaboration" />
@@ -78,23 +84,9 @@ export default function Sidebar() {
               <h3 className="text-sm font-medium text-neutral-300">Theme</h3>
 
               <div className="flex gap-2">
-                <ThemeButton
-                  icon={Sun}
-                  active={theme === "light"}
-                  onClick={() => setTheme("light")}
-                />
-
-                <ThemeButton
-                  icon={Moon}
-                  active={theme === "dark"}
-                  onClick={() => setTheme("dark")}
-                />
-
-                <ThemeButton
-                  icon={Monitor}
-                  active={theme === "system"}
-                  onClick={() => setTheme("system")}
-                />
+                <ThemeButton icon={Sun} active={theme === "light"} onClick={() => setTheme("light")} />
+                <ThemeButton icon={Moon} active={theme === "dark"} onClick={() => setTheme("dark")} />
+                <ThemeButton icon={Monitor} active={theme === "system"} onClick={() => setTheme("system")} />
               </div>
             </div>
 
@@ -105,16 +97,12 @@ export default function Sidebar() {
               </h3>
 
               <div className="flex gap-2">
-                <ColorBox color="#ffffff" active />
-                <ColorBox color="#f8f9fa" />
-                <ColorBox color="#f5faff" />
-                <ColorBox color="#fffce8" />
-                <ColorBox color="#fdf8f6" />
+                <ColorBox color="black" active />
               </div>
 
               <div className="flex items-center justify-between bg-neutral-700 rounded-md px-3 py-2">
                 <span className="font-mono text-sm text-neutral-200">
-                  #ffffff
+                  Plane
                 </span>
 
                 <button className="p-1.5 rounded hover:bg-neutral-600 transition">
@@ -130,9 +118,10 @@ export default function Sidebar() {
   );
 }
 
-function MenuItem({ icon: Icon, label, shortcut, highlight }: any) {
+function MenuItem({ icon: Icon, label, shortcut, highlight, onClick }: any) {
   return (
     <button
+      onClick={onClick}
       className={`flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm transition hover:bg-neutral-700 ${
         highlight ? "text-indigo-400 font-semibold" : ""
       }`}
