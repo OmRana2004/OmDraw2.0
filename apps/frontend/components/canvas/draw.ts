@@ -1,12 +1,25 @@
 import rough from "roughjs";
 
 export type Shape = {
-  type: "rectangle" | "circle" | "line" | "diamond" | "arrow" | "pencil";
+  type:
+    | "rectangle"
+    | "circle"
+    | "line"
+    | "diamond"
+    | "arrow"
+    | "pencil"
+    | "text";
+
   x1?: number;
   y1?: number;
   x2?: number;
   y2?: number;
+
   points?: { x: number; y: number }[];
+
+  textValue?: string;
+  width?: number;
+  height?: number;
 };
 
 export function drawShapes(
@@ -24,13 +37,12 @@ export function drawShapes(
   const strokeColor = isDark ? "#f9fafb" : "#111827";
 
   elements.forEach((el) => {
-
     const options = {
       roughness: 0,
       bowing: 0,
       strokeWidth: 2,
       seed: 1,
-      stroke: strokeColor
+      stroke: strokeColor,
     };
 
     // RECTANGLE
@@ -117,15 +129,26 @@ export function drawShapes(
       ctx.strokeStyle = strokeColor;
 
       el.points.forEach((point, index) => {
-        if (index === 0) {
-          ctx.moveTo(point.x, point.y);
-        } else {
-          ctx.lineTo(point.x, point.y);
-        }
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
       });
 
       ctx.stroke();
     }
 
+    // TEXT
+    if (el.type === "text" && el.x1 !== undefined && el.textValue !== undefined) {
+      const textColor = isDark ? "#f59e0b" : "#d97706";
+
+      ctx.font = "28px Caveat, cursive";
+      ctx.fillStyle = textColor;
+      ctx.textBaseline = "top";
+
+      ctx.fillText(el.textValue, el.x1, el.y1!);
+
+      const metrics = ctx.measureText(el.textValue);
+      el.width = metrics.width;
+      el.height = 28;
+    }
   });
 }
