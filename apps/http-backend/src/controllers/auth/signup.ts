@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
-import { prismaClient } from "@repo/db/client";
+import { prismaClient } from "@repo/db";
 import { CreateUserSchema } from "@repo/common/types";
 
 export const signup = async (req: Request, res: Response) => {

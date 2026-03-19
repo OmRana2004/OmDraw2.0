@@ -3,7 +3,7 @@ dotenv.config();
 
 import { WebSocketServer, WebSocket } from "ws";
 import jwt, { JwtPayload } from "jsonwebtoken";
-import { prismaClient } from "@repo/db/client";
+import { prismaClient } from "@repo/db";
 import { WebSocketMessage, WsDataType } from "@repo/common/types";
 
 const JWT_SECRET = process.env.JWT_SECRET!;

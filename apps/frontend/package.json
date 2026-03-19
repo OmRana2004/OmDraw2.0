@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-  "dev": "NEXT_DISABLE_TURBOPACK=1 next dev --port 3000",
+  "dev": "set NEXT_DISABLE_TURBOPACK=1 && next dev --port 3000",
   "build": "next build",
   "start": "next start",
   "lint": "eslint --max-warnings 0",
